@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>АудиториУМ — умное расписание для вузов</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{primary:'#2563EB',secondary:'#7C3AED',surface:'#F8FAFC',card:'#FFFFFF'},fontFamily:{sans:['Manrope','sans-serif']},borderRadius:{card:'16px'}}}}
+</script>
+<style>
+:root{--grad:linear-gradient(135deg,#2563EB,#7C3AED);--shadow:0 4px 24px rgba(0,0,0,0.06);--shadow-lg:0 8px 40px rgba(0,0,0,0.1)}
+*{scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent}
+body{font-family:'Manrope',sans-serif;background:#F8FAFC;color:#1E293B;overflow-x:hidden}
+.grad-text{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad-bg{background:var(--grad)}
+.grad-border{border:2px solid transparent;background-clip:padding-box;position:relative}
+.grad-border::before{content:'';position:absolute;inset:-2px;border-radius:inherit;background:var(--grad);z-index:-1}
+.card{background:#fff;border-radius:16px;box-shadow:var(--shadow);transition:all .3s ease}
+.card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.btn-grad{background:var(--grad);color:#fff;border:none;border-radius:12px;padding:12px 28px;font-weight:600;cursor:pointer;transition:all .3s;font-size:15px}
+.btn-grad:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,99,235,.35)}
+.btn-outline{border:2px solid #2563EB;color:#2563EB;background:transparent;border-radius:12px;padding:10px 24px;font-weight:600;cursor:pointer;transition:all .3s;font-size:15px}
+.btn-outline:hover{background:#2563EB;color:#fff}
+.sidebar{width:280px;min-height:100vh;background:#fff;border-right:1px solid #E2E8F0;position:fixed;left:0;top:0;z-index:40;transition:transform .3s ease}
+.sidebar.collapsed{transform:translateX(-100%)}
+.sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:35;opacity:0;pointer-events:none;transition:opacity .3s}
+.sidebar-backdrop.active{opacity:1;pointer-events:auto}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 20px;margin:2px 12px;border-radius:12px;cursor:pointer;transition:all .2s;color:#64748B;font-weight:500;font-size:14.5px}
+.nav-item:hover{background:#F1F5F9;color:#1E293B}
+.nav-item.active{background:linear-gradient(135deg,rgba(37,99,235,.1),rgba(124,58,237,.1));color:#2563EB;font-weight:600}
+.nav-item.active i{color:#2563EB}
+.main-content{margin-left:280px;min-height:100vh;transition:margin .3s}
+.main-content.full{margin-left:0}
+.input-field{width:100%;padding:11px 16px;border:2px solid #E2E8F0;border-radius:12px;font-family:inherit;font-size:14.5px;transition:all .2s;outline:none;background:#fff;box-sizing:border-box}
+.input-field:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.table-row{transition:background .15s}
+.table-row:hover{background:#F8FAFC}
+.toast{position:fixed;top:24px;right:24px;padding:14px 24px;border-radius:12px;color:#fff;font-weight:500;font-size:14.5px;z-index:9999;animation:slideIn .4s ease;box-shadow:0 8px 32px rgba(0,0,0,.15);display:flex;align-items:center;gap:10px;max-width:calc(100% - 48px)}
+.toast.success{background:#059669}.toast.error{background:#DC2626}.toast.info{background:#2563EB}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}
+@keyframes fadeUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse-grad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fade-up{animation:fadeUp .6s ease both}
+.fade-up-d1{animation-delay:.1s}.fade-up-d2{animation-delay:.2s}.fade-up-d3{animation-delay:.3s}.fade-up-d4{animation-delay:.4s}
+.heatmap-cell{width:100%;aspect-ratio:1.4;border-radius:8px;transition:all .2s;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff}
+.heatmap-cell:hover{transform:scale(1.08);z-index:2;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.schedule-cell{border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer;transition:all .2s;border:2px solid transparent;min-height:60px}
+.schedule-cell:hover{transform:scale(1.02);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.schedule-cell.conflict{border-color:#DC2626!important;box-shadow:0 0 0 2px rgba(220,38,38,.2)}
+.schedule-cell.type-lecture{background:#EFF6FF;border-left:4px solid #2563EB}
+.schedule-cell.type-practice{background:#F0FDF4;border-left:4px solid #16A34A}
+.schedule-cell.type-lab{background:#FFFBEB;border-left:4px solid #D97706}
+.tooltip-custom{position:absolute;background:#1E293B;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;pointer-events:none;z-index:100;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;padding:16px}
+.modal-box{background:#fff;border-radius:20px;padding:24px;max-width:540px;width:100%;box-shadow:var(--shadow-lg);animation:fadeUp .3s ease;max-height:90vh;overflow-y:auto}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.progress-ring{transform:rotate(-90deg)}
+.drop-zone{border:2px dashed #CBD5E1;border-radius:16px;padding:24px;text-align:center;transition:all .3s;cursor:pointer}
+.drop-zone:hover,.drop-zone.dragover{border-color:#2563EB;background:rgba(37,99,235,.04)}
+.slider-custom{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#E2E8F0;outline:none}
+.slider-custom::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--grad);cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,.3)}
+.tab-btn{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;transition:all .2s;border:none;background:transparent;color:#64748B;white-space: nowrap}
+.tab-btn.active{background:var(--grad);color:#fff}
+.tab-btn:hover:not(.active){background:#F1F5F9;color:#1E293B}
+.status-badge{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;white-space: nowrap}
+.status-green{background:#DCFCE7;color:#166534}.status-orange{background:#FFF7ED;color:#9A3412}.status-red{background:#FEE2E2;color:#991B1B}
+.hero-bg{background:linear-gradient(135deg,rgba(37,99,235,.04) 0%,rgba(124,58,237,.04) 50%,rgba(37,99,235,.02) 100%)}
+.hero-pattern{background-image:radial-gradient(circle at 1px 1px,rgba(37,99,235,.06) 1px,transparent 0);background-size:32px 32px}
+.gen-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding: 20px; text-align: center}
+.gen-spinner{width:56px;height:56px;border:4px solid #E2E8F0;border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite}
+
+/* Адаптив для мобильных */
+@media (max-width: 1023px) {
+  .sidebar {
+    transform: translateX(-100%);
+    z-index: 50;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.1);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  .main-content {
+    margin-left: 0 !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="app-wrapper" id="app"></div>
+<div id="toastBox"></div>
+<div id="modalBox"></div>
+
+<script>
+/* ========== МОКОВАЯ БАЗА ДАННЫХ ========== */
+const DB = {
+  university: { id:1, name:'Астраханский государственный медицинский университет', short:'Астраханский ГМУ', rector:'Поройский С.В.' },
+  buildings: [
+    { id:1, name:'Корпус 1', address:'ул. Бакинская, 121' },
+    { id:2, name:'Корпус 2', address:'ул. Мечникова, 20' },
+    { id:3, name:'Корпус 3', address:'пр. Началовское шоссе, 9/1' }
+  ],
+  rooms: [
+    {id:1,name:'Аудитория 1',buildingId:1,floor:1,capacity:200,type:'lecture',equipment:['экран','компьютер','микрофон']},
+    {id:2,name:'Аудитория 2',buildingId:1,floor:1,capacity:200,type:'lecture',equipment:['экран','компьютер','микрофон']},
+    {id:3,name:'Актовый зал',buildingId:1,floor:1,capacity:527,type:'lecture',equipment:['экран','компьютер','микрофон']},
+    {id:4,name:'202',buildingId:1,floor:2,capacity:30,type:'practice',equipment:['доска']},
+    {id:5,name:'423',buildingId:1,floor:4,capacity:25,type:'computer',equipment:['ПК x25','проектор']},
+    {id:6,name:'425',buildingId:1,floor:4,capacity:25,type:'computer',equipment:['ПК x25']},
+    {id:7,name:'301',buildingId:1,floor:3,capacity:20,type:'lab',equipment:['лаб.стенды']},
+    {id:8,name:'422',buildingId:1,floor:3,capacity:15,type:'lab',equipment:['лаб.стенды','ПК x10']},
+    {id:9,name:'Аудитория 1',buildingId:2,floor:1,capacity:400,type:'lecture',equipment:['экран','компьютер','микрофон']},
+    {id:10,name:'Актовый зал',buildingId:2,floor:3,capacity:150,type:'lecture',equipment:['экран','компьютер','микрофон']},
+    {id:11,name:'201',buildingId:2,floor:2,capacity:35,type:'practice',equipment:['проектор','доска']},
+    {id:12,name:'202',buildingId:2,floor:2,capacity:35,type:'practice',equipment:['доска']},
+    {id:13,name:'203',buildingId:2,floor:2,capacity:25,type:'practice',equipment:['проектор']},
+    {id:14,name:'301',buildingId:2,floor:3,capacity:20,type:'lab',equipment:['лаб.стенды']},
+    {id:15,name:'302',buildingId:2,floor:3,capacity:20,type:'lab',equipment:['лаб.стенды','ПК x15']},
+    {id:16,name:'Актовый зал',buildingId:3,floor:1,capacity:200,type:'lecture',equipment:['проектор','микрофон']},
+    {id:17,name:'102',buildingId:3,floor:1,capacity:30,type:'practice',equipment:['доска','проектор']},
+    {id:18,name:'103',buildingId:3,floor:1,capacity:20,type:'computer',equipment:['ПК x20','проектор']},
+    {id:19,name:'201',buildingId:3,floor:2,capacity:15,type:'lab',equipment:['лаб.стенды']},
+    {id:20,name:'202',buildingId:3,floor:2,capacity:25,type:'practice',equipment:['доска']}
+  ],
+  teachers: [
+    {id:1,name:'Набережная Инна Борисовна',dept:'Кафедра Общественного здоровья и здравоохранения',maxHours:18,phone:'+7(999)111-11-01',restrictions:[3]},
+    {id:2,name:'Набережная Жанна Борисовна',dept:'Кафедра Общественного здоровья и здравоохранения',maxHours:20,phone:'+7(999)111-11-02',restrictions:[]},
+    {id:3,name:'Санджиев Эренджен Айсович',dept:'Кафедра анатомии',maxHours:16,phone:'+7(999)111-11-03',restrictions:[6]},
+    {id:4,name:'Удочкина Лариса Альбертовна',dept:'Кафедра анатомии',maxHours:18,phone:'+7(999)111-11-04',restrictions:[]},
+    {id:5,name:'Демидов Алексей Александрович',dept:'Кафедра госпитальной терапии',maxHours:20,phone:'+7(999)111-11-05',restrictions:[5]},
+    {id:6,name:'Дьякова Ольга Николаевна',dept:'Кафедра госпитальной терапии',maxHours:16,phone:'+7(999)111-11-06',restrictions:[]},
+    {id:7,name:'Кадыков Александр Михайлович',dept:'Кафедра акушерства и гинекологии',maxHours:18,phone:'+7(999)111-11-07',restrictions:[]},
+    {id:8,name:'Костенко Екатерина Васильевна',dept:'Кафедра акушерства и гинекологии',maxHours:20,phone:'+7(999)111-11-08',restrictions:[4]},
+    {id:9,name:'Гагарина Елена Юрьевна',dept:'Кафедра иностранных и латинского языков',maxHours:16,phone:'+7(999)111-11-09',restrictions:[]},
+    {id:10,name:'Джабраилова Сара Гамидовна',dept:'Кафедра иностранных и латинского языков',maxHours:18,phone:'+7(999)111-11-10',restrictions:[3]},
+    {id:11,name:'Алиева Алтынай Асылбековна',dept:'Кафедра инфекционных болезней и эпидемиологии',maxHours:20,phone:'+7(999)111-11-11',restrictions:[]},
+    {id:12,name:'Аракельян Рудольф Сергеевич',dept:'Кафедра инфекционных болезней и эпидемиологии',maxHours:18,phone:'+7(999)111-11-12',restrictions:[]},
+    {id:13,name:'Цоцонава Жужуна Мурмановна',dept:'Кафедра неврологии и нейрохирургии',maxHours:22,phone:'+7(999)111-11-13',restrictions:[]},
+    {id:14,name:'Локтионова Алевтина Ивановна',dept:'Кафедра неврологии и нейрохирургии',maxHours:20,phone:'+7(999)111-11-14',restrictions:[5]},
+    {id:15,name:'Сердюков Анатолий Гаврилович',dept:'Кафедра Кафедра Общественного здоровья и здравоохранения',maxHours:14,phone:'+7(999)111-11-15',restrictions:[]}
+  ],
+  groups: [
+    {id:1,name:'101',course:2,students:28},{id:2,name:'102',course:2,students:26},{id:3,name:'201',course:3,students:30},
+    {id:4,name:'202',course:3,students:25},{id:5,name:'301',course:4,students:22},{id:6,name:'302',course:4,students:24},
+    {id:7,name:'101',course:2,students:27},{id:8,name:'102',course:2,students:29},{id:9,name:'201',course:3,students:20},{id:10,name:'202',course:3,students:23}
+  ],
+  disciplines: [
+    {id:1,name:'Общественного здоровья и здравоохранения',type:'practice',hours:68,teacherId:1},
+    {id:2,name:'Общественного здоровья и здравоохранения',type:'lab',hours:52,teacherId:2},
+    {id:3,name:'Акушерство и гинекология',type:'lecture',hours:34,teacherId:7},
+    {id:4,name:'Инфекционные болезни',type:'lecture',hours:52,teacherId:11},
+    {id:5,name:'Анатомия',type:'practice',hours:52,teacherId:3},
+    {id:6,name:'Анатомия',type:'lab',hours:68,teacherId:4},
+    {id:7,name:'Госпитальная терапия',type:'lecture',hours:34,teacherId:5},
+    {id:8,name:'Английский язык',type:'practice',hours:34,teacherId:9},
+    {id:9,name:'Госпитальная терапия',type:'lecture',hours:17,teacherId:6},
+    {id:10,name:'Неврология',type:'lecture',hours:68,teacherId:13},
+    {id:11,name:'Неврология',type:'lecture',hours:52,teacherId:14},
+    {id:12,name:'Общественного здоровья и здравоохранения',type:'lecture',hours:34,teacherId:15},
+    {id:13,name:'Латинского язык',type:'lab',hours:52,teacherId:10},
+    {id:14,name:'Акушерство и гинекология',type:'lab',hours:52,teacherId:8},
+    {id:15,name:'Эпидемиология',type:'lecture',hours:34,teacherId:12}
+  ],
+  groupDisciplines: [
+    {groupId:1,disciplineId:1},{groupId:1,disciplineId:2},{groupId:1,disciplineId:10},{groupId:1,disciplineId:11},{groupId:1,disciplineId:12},
+    {groupId:2,disciplineId:1},{groupId:2,disciplineId:4},{groupId:2,disciplineId:10},{groupId:2,disciplineId:11},{groupId:2,disciplineId:12},
+    {groupId:3,disciplineId:5},{groupId:3,disciplineId:6},{groupId:3,disciplineId:7},{groupId:3,disciplineId:9},{groupId:3,disciplineId:13},
+    {groupId:4,disciplineId:5},{groupId:4,disciplineId:6},{groupId:4,disciplineId:8},{groupId:4,disciplineId:9},{groupId:4,disciplineId:14},
+    {groupId:5,disciplineId:3},{groupId:5,disciplineId:8},{groupId:5,disciplineId:15},{groupId:5,disciplineId:13},
+    {groupId:6,disciplineId:3},{groupId:6,disciplineId:7},{groupId:6,disciplineId:15},{groupId:6,disciplineId:14},
+    {groupId:7,disciplineId:1},{groupId:7,disciplineId:3},{groupId:7,disciplineId:10},{groupId:7,disciplineId:11},{groupId:7,disciplineId:12},
+    {groupId:8,disciplineId:4},{groupId:8,disciplineId:2},{groupId:8,disciplineId:10},{groupId:8,disciplineId:11},{groupId:8,disciplineId:12},
+    {groupId:9,disciplineId:8},{groupId:9,disciplineId:9},{groupId:9,disciplineId:14},{groupId:9,disciplineId:15},
+    {groupId:10,disciplineId:7},{groupId:10,disciplineId:9},{groupId:10,disciplineId:13},{groupId:10,disciplineId:15}
+  ],
+  events: [],
+  bookings: [
+    {id:1,roomId:5,date:'2025-02-10',timeSlot:4,purpose:'Олимпиада по программированию',status:'approved',requester:'Студсовет'},
+    {id:2,roomId:1,date:'2025-02-12',timeSlot:2,purpose:'Научная конференция',status:'pending',requester:'Кафедра ИВТ'},
+    {id:3,roomId:9,date:'2025-02-14',timeSlot:3,purpose:'День открытых дверей',status:'approved',requester:'Приёмная комиссия'},
+    {id:4,roomId:18,date:'2025-02-11',timeSlot:5,purpose:'Курс по Data Science',status:'rejected',requester:'Центр доп. образования'},
+    {id:5,roomId:3,date:'2025-02-15',timeSlot:1,purpose:'Заседание ГЭК',status:'pending',requester:'Учебный отдел'}
+  ],
+  users: [{id:1,email:'admin@agmu.ru',password:'admin123',name:'Администратор',role:'admin'}]
+};
+
+const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб'];
+const SLOTS = [
+  {id:1,time:'8:30 — 10:00'},{id:2,time:'10:15 — 11:45'},{id:3,time:'12:00 — 13:30'},
+  {id:4,time:'14:00 — 15:30'},{id:5,time:'15:45 — 17:15'},{id:6,time:'17:30 — 19:00'}
+];
+const TYPE_MAP = {lecture:'Лекция',practice:'Практика',lab:'Лаборатория'};
+const TYPE_COLOR = {lecture:'type-lecture',practice:'type-practice',lab:'type-lab'};
+
+const State = {
+  user: null, page: '/', sidebarOpen: true,
+  uploadedFiles: {plans:null,rooms:null,restrictions:null},
+  algoSettings:{balance:70,compactness:50,gaps:30},
+  scheduleFilter:'group', scheduleFilterId:1,
+  heatmapBuilding:1, heatmapFloor:1,
+  peopleTab:'teachers', scheduleGenerated: false
+};
+
+function $(sel){return document.querySelector(sel)}
+function $$(sel){return document.querySelectorAll(sel)}
+function toast(msg,type='info'){
+  const d=document.createElement('div');d.className=`toast ${type}`;
+  d.innerHTML=`<i class="fas fa-${type==='success'?'check-circle':type==='error'?'exclamation-circle':'info-circle'}"></i><span>${msg}</span>`;
+  $('#toastBox').appendChild(d);
+  setTimeout(()=>{d.style.animation='slideOut .4s ease forwards';setTimeout(()=>d.remove(),400)},3000);
+}
+function showModal(html){$('#modalBox').innerHTML=`<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal-box">${html}</div></div>`}
+function closeModal(){$('#modalBox').innerHTML=''}
+function getRoom(id){return DB.rooms.find(r=>r.id===id)}
+function getBuilding(id){return DB.buildings.find(b=>b.id===id)}
+function getTeacher(id){return DB.teachers.find(t=>t.id===id)}
+function getGroup(id){return DB.groups.find(g=>g.id===id)}
+function getDisc(id){return DB.disciplines.find(d=>d.id===id)}
+function roomsByBuilding(bid,floor){return DB.rooms.filter(r=>r.buildingId===bid&&(!floor||r.floor===floor))}
+
+function animateCounters(){
+  $$('.counter-anim').forEach(el=>{
+    const target=parseFloat(el.dataset.target);
+    const suffix=el.dataset.suffix||'';const prefix=el.dataset.prefix||'';
+    let current=0;const step=target/40;
+    const timer=setInterval(()=>{current+=step;if(current>=target){current=target;clearInterval(timer)}el.textContent=prefix+Math.round(current)+suffix;},30);
+  });
+}
+
+function generateSchedule(){
+  DB.events=[];let eventId=1;const allSlots=[];
+  for(let d=0;d<6;d++) for(let s=0;s<6;s++) allSlots.push({day:d,slot:s+1});
+  DB.groupDisciplines.forEach(gd=>{
+    const disc=getDisc(gd.disciplineId);const teacher=getTeacher(disc.teacherId);
+    if(!disc||!teacher) return;
+    const pairsPerWeek=Math.max(1,Math.round(disc.hours/17));let assigned=0;
+    const shuffled=[...allSlots].sort(()=>Math.random()-0.5);
+    for(const sl of shuffled){
+      if(assigned>=pairsPerWeek) break;
+      if(teacher.restrictions.includes(sl.slot)) continue;
+      if(DB.events.find(e=>e.teacherId===teacher.id&&e.day===sl.day&&e.slot===sl.slot)) continue;
+      if(DB.events.find(e=>e.groupId===gd.groupId&&e.day===sl.day&&e.slot===sl.slot)) continue;
+      const group=getGroup(gd.groupId);let room=null;
+      const candidates=DB.rooms.filter(r=>r.capacity>=group.students);
+      const typeMatch=candidates.filter(r=>{if(disc.type==='lecture') return r.type==='lecture';if(disc.type==='lab') return r.type==='lab'||r.type==='computer';return true;});
+      const pool=typeMatch.length?typeMatch:candidates;
+      room=pool.find(r=>!DB.events.find(e=>e.roomId===r.id&&e.day===sl.day&&e.slot===sl.slot));
+      const conflict=!room;if(!room) room=DB.rooms[Math.floor(Math.random()*DB.rooms.length)];
+      DB.events.push({id:eventId++,day:sl.day,slot:sl.slot,roomId:room.id,teacherId:teacher.id,groupId:gd.groupId,disciplineId:disc.id,type:disc.type,conflict,held:false});
+      assigned++;
+    }
+  });
+  State.scheduleGenerated=true;
+}
+generateSchedule();
+
+function navigate(path){window.location.hash=path}
+function getApp(){State.page=window.location.hash.slice(1)||'/';renderApp()}
+window.addEventListener('hashchange',getApp);
+
+function renderApp(){
+  const app=$('#app');const page=State.page;const isAuth=page==='/login'||page==='/register';const isPublic=page==='/'||isAuth;
+  if(isPublic){app.innerHTML=isAuth?renderAuthPage():renderHomePage();}
+  else {if(!State.user){navigate('/login');return}app.innerHTML=renderLayout();}
+  setTimeout(()=>{if(page==='/') initHomeAnimations();if(page==='/dashboard') initDashboard();if(page==='/analytics') initAnalytics();attachGlobalEvents();},50);
+}
+
+/* ========== ГЛАВНАЯ ========== */
+function renderHomePage(){
+  return `
+  <header class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3"><div class="grad-bg w-9 h-9 rounded-xl flex items-center justify-center"><i class="fas fa-calendar-check text-white text-sm"></i></div><span class="font-800 text-lg">АудиториУМ</span></div>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button class="btn-outline text-sm hidden sm:inline-block" onclick="navigate('/login')" style="padding:8px 18px">Войти</button>
+        <button class="btn-grad text-sm" onclick="navigate('/register')" style="padding:8px 18px">Регистрация</button>
+      </div>
+    </div>
+  </header>
+  <main class="pt-16">
+    <section class="hero-bg hero-pattern relative overflow-hidden" style="min-height:80vh;display:flex;align-items:center">
+      <div class="absolute top-20 right-10 w-72 h-72 rounded-full opacity-20 hidden lg:block" style="background:radial-gradient(circle,#7C3AED,transparent 70%)"></div>
+      <div class="absolute bottom-10 left-10 w-96 h-96 rounded-full opacity-15 hidden lg:block" style="background:radial-gradient(circle,#2563EB,transparent 70%)"></div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 relative z-10">
+        <div class="max-w-3xl">
+          <h1 class="fade-up fade-up-d1 text-4xl sm:text-5xl lg:text-6xl font-900 leading-tight mb-6">Умное расписание<br><span class="grad-text">для вашего вуза</span></h1>
+          <p class="fade-up fade-up-d2 text-base sm:text-lg text-gray-500 leading-relaxed mb-10 max-w-xl">Автоматическая генерация расписания с учётом всех ограничений. Управление аудиториями, преподавателями и группами в единой системе.</p>
+          <div class="fade-up fade-up-d3 flex flex-wrap gap-4">
+            <button class="btn-grad text-base" onclick="navigate('/register')">Начать работу <i class="fas fa-arrow-right ml-2"></i></button>
+            <button class="btn-outline text-base" onclick="document.getElementById('steps').scrollIntoView({behavior:'smooth'})">Как это работает</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="py-16 sm:py-20"><div class="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div class="card p-8 text-center fade-up"><div class="text-4xl font-900 grad-text counter-anim" data-target="25" data-prefix="+" data-suffix="%">0</div><div class="text-gray-500 mt-2 font-500">Рост эффективности</div></div>
+      <div class="card p-8 text-center fade-up fade-up-d1"><div class="text-4xl font-900 grad-text counter-anim" data-target="70" data-prefix="-" data-suffix="%">0</div><div class="text-gray-500 mt-2 font-500">Снижение трудозатрат</div></div>
+      <div class="card p-8 text-center fade-up fade-up-d2"><div class="text-4xl font-900 grad-text counter-anim" data-target="0" data-prefix="" data-suffix="">0</div><div class="text-gray-500 mt-2 font-500">Конфликтов в расписании</div></div>
+    </div></section>
+    <section id="steps" class="py-16 sm:py-20 bg-white"><div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <h2 class="text-2xl sm:text-3xl font-800 text-center mb-4">Как это работает</h2><p class="text-gray-500 text-center mb-12 max-w-lg mx-auto">Четыре простых шага от загрузки данных до готового расписания</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        ${[{icon:'fa-upload',title:'Загрузка данных',desc:'Учебные планы, список аудиторий и ограничения преподавателей'},{icon:'fa-cogs',title:'Настройка алгоритма',desc:'Балансировка нагрузки, компактность, минимизация окон'},{icon:'fa-magic',title:'Генерация',desc:'Автоматическое построение расписания за считанные секунды'},{icon:'fa-tasks',title:'Управление',desc:'Ручная корректировка, экспорт, утверждение и мониторинг'}].map((s,i)=>`
+          <div class="text-center fade-up fade-up-d${i}"><div class="w-16 h-16 grad-bg rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg" style="box-shadow:0 8px 24px rgba(37,99,235,.25)"><i class="fas ${s.icon} text-white text-xl"></i></div><div class="text-sm font-700 text-gray-400 mb-2">Шаг ${i+1}</div><div class="text-lg font-700 mb-2">${s.title}</div><div class="text-sm text-gray-500 leading-relaxed">${s.desc}</div></div>`).join('')}
+      </div>
+    </div></section>
+    <section class="py-16 sm:py-20"><div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <h2 class="text-2xl sm:text-3xl font-800 text-center mb-4">Знакомые проблемы?</h2><p class="text-gray-500 text-center mb-12 max-w-lg mx-auto">АудиториУМ решает ключевые проблемы планирования в вузах</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        ${[{icon:'fa-door-open',title:'Простаивающие аудитории',desc:'До 30% аудиторий не используются в пиковые часы из-за неэффективного распределения',color:'#EF4444'},{icon:'fa-user-clock',title:'Перегрузка сотрудников',desc:'Диспетчеры тратят до 40 часов в неделю на ручное составление расписания',color:'#F59E0B'},{icon:'fa-exclamation-triangle',title:'Конфликты и наложения',desc:'Пересечения в расписании преподавателей и групп ведут к срыву занятий',color:'#EF4444'},{icon:'fa-file-alt',title:'Устаревшие инструменты',desc:'Таблицы Excel не справляются с растущей сложностью и объёмом данных',color:'#F59E0B'}].map((p,i)=>`
+          <div class="card p-7 fade-up fade-up-d${i}" style="border-top:3px solid ${p.color}"><div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:${p.color}15"><i class="fas ${p.icon}" style="color:${p.color}"></i></div><div class="font-700 text-base mb-2">${p.title}</div><div class="text-sm text-gray-500 leading-relaxed">${p.desc}</div></div>`).join('')}
+      </div>
+    </div></section>
+    <section class="py-16 sm:py-20"><div class="max-w-4xl mx-auto px-4 sm:px-6">
+      <div class="grad-bg rounded-2xl p-8 sm:p-12 text-center text-white relative overflow-hidden">
+        <div class="absolute inset-0 opacity-10" style="background-image:radial-gradient(circle at 2px 2px,#fff 1px,transparent 0);background-size:24px 24px"></div>
+        <div class="relative z-10"><h2 class="text-2xl sm:text-3xl font-800 mb-4">Готовы оптимизировать расписание?</h2><p class="text-white/80 mb-8 max-w-md mx-auto">Присоединяйтесь к вузам, которые уже используют АудиториУМ</p>
+        <button class="bg-white text-primary font-700 px-8 py-3.5 rounded-xl hover:shadow-xl transition-all" onclick="navigate('/register')" style="color:#2563EB">Зарегистрировать вуз <i class="fas fa-arrow-right ml-2"></i></button></div>
+      </div>
+    </div></section>
+    <footer class="border-t border-gray-200 py-10 bg-white"><div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3"><div class="grad-bg w-8 h-8 rounded-lg flex items-center justify-center"><i class="fas fa-calendar-check text-white text-xs"></i></div><span class="font-700 text-sm">АудиториУМ</span></div>
+      <div class="text-sm text-gray-400">&copy; 2025 АудиториУМ</div>
+    </div></footer>
+  </main>`;
+}
+
+function initHomeAnimations(){const obs=new IntersectionObserver((entries)=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.animationPlayState='running';obs.unobserve(e.target)}});},{threshold:0.2});$$('.counter-anim').forEach(el=>obs.observe(el));setTimeout(animateCounters,600);}
+
+/* ========== АВТОРИЗАЦИЯ ========== */
+function renderAuthPage(){
+  const isLogin=State.page==='/login';
+  return `<div class="min-h-screen flex items-center justify-center hero-bg hero-pattern px-4 py-8"><div class="card p-8 sm:p-10 w-full max-w-md fade-up">
+    <div class="text-center mb-8"><div class="grad-bg w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg" style="box-shadow:0 8px 24px rgba(37,99,235,.25)"><i class="fas fa-calendar-check text-white text-xl"></i></div><h1 class="text-2xl font-800">${isLogin?'Вход в систему':'Регистрация вуза'}</h1><p class="text-gray-500 text-sm mt-1">${isLogin?'Введите данные для входа':'Заполните данные вашего учебного заведения'}</p></div>
+    <form id="authForm" class="space-y-4">
+      ${!isLogin?`<div><label class="block text-sm font-600 mb-1.5">Название вуза</label><input class="input-field" id="authName" placeholder="Московский технический университет" required></div>`:''}
+      <div><label class="block text-sm font-600 mb-1.5">Email</label><input class="input-field" id="authEmail" type="email" placeholder="admin@university.ru" value="admin@agmu.ru" required></div>
+      <div><label class="block text-sm font-600 mb-1.5">Пароль</label><input class="input-field" id="authPass" type="password" placeholder="Введите пароль" value="admin123" required></div>
+      ${!isLogin?`<div><label class="block text-sm font-600 mb-1.5">Повторите пароль</label><input class="input-field" id="authPass2" type="password" placeholder="Повторите пароль" required></div>`:''}
+      <button type="submit" class="btn-grad w-full mt-2">${isLogin?'Войти':'Зарегистрироваться'}</button>
+    </form>
+    <div class="text-center mt-6 text-sm text-gray-500">${isLogin?'Нет аккаунта?':'Уже зарегистрированы?'} <a href="#${isLogin?'/register':'/login'}" class="text-primary font-600 ml-1">${isLogin?'Создать':'Войти'}</a></div>
+  </div></div>`;
+}
+
+/* ========== ЛЕЙАУТ ========== */
+function renderLayout(){
+  const isMobile = window.innerWidth < 1024;
+  const navItems=[{path:'/dashboard',icon:'fa-chart-pie',label:'Дашборд'},{path:'/schedule',icon:'fa-calendar-alt',label:'Конструктор'},{path:'/rooms',icon:'fa-building',label:'Аудитории'},{path:'/people',icon:'fa-users',label:'Люди'},{path:'/analytics',icon:'fa-chart-bar',label:'Аналитика'},{path:'/bookings',icon:'fa-bookmark',label:'Бронирование'},{path:'/settings',icon:'fa-cog',label:'Настройки'}];
+  return `
+  <aside class="sidebar ${isMobile ? '' : (State.sidebarOpen ? '' : 'collapsed')}" id="sidebar">
+    <div class="p-5 border-b border-gray-100">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3"><div class="grad-bg w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"><i class="fas fa-calendar-check text-white text-sm"></i></div><div class="overflow-hidden"><div class="font-800 text-sm">АудиториУМ</div><div class="text-xs text-gray-400 truncate">${DB.university.short}</div></div></div>
+        <button onclick="toggleSidebar()" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center lg:hidden"><i class="fas fa-times text-gray-500"></i></button>
+      </div>
+    </div>
+    <nav class="py-4 flex-1">${navItems.map(n=>`<div class="nav-item ${State.page===n.path?'active':''}" onclick="navigate('${n.path}')"><i class="fas ${n.icon} w-5 text-center text-sm"></i><span>${n.label}</span></div>`).join('')}</nav>
+    <div class="p-4 border-t border-gray-100">
+      <div class="flex items-center gap-3 px-2">
+        <div class="w-9 h-9 rounded-full grad-bg flex items-center justify-center text-white text-sm font-700 flex-shrink-0">А</div>
+        <div class="overflow-hidden flex-1"><div class="text-sm font-600 truncate">${State.user?.name||'Админ'}</div><div class="text-xs text-gray-400">${State.user?.role||'admin'}</div></div>
+        <button onclick="State.user=null;navigate('/')" class="text-gray-400 hover:text-red-500 transition-colors" title="Выйти"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </div>
+  </aside>
+  <div class="main-content ${!isMobile && !State.sidebarOpen ? 'full' : ''}" id="mainContent">
+    <header class="h-14 sm:h-16 bg-white/80 backdrop-blur-lg border-b border-gray-100 flex items-center px-4 sm:px-6 gap-4 sticky top-0 z-30">
+      <button onclick="toggleSidebar()" class="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"><i class="fas fa-bars text-gray-500"></i></button>
+      <div class="flex-1"></div>
+      <div class="text-sm text-gray-400 hidden sm:block" id="headerBreadcrumbs"></div>
+    </header>
+    <div class="p-4 sm:p-6" id="pageContent">${renderPage()}</div>
+  </div>`;
+}
+
+function toggleSidebar(){
+  const isMobile = window.innerWidth < 1024;
+  const sb=$('#sidebar'), mc=$('#mainContent'), bd=$('#sidebarBackdrop');
+  if(isMobile){
+    sb.classList.toggle('open');
+    bd.classList.toggle('active', !sb.classList.contains('open'));
+    document.body.style.overflow = sb.classList.contains('open') ? 'hidden' : '';
+  } else {
+    State.sidebarOpen = !State.sidebarOpen;
+    sb.classList.toggle('collapsed', !State.sidebarOpen);
+    mc.classList.toggle('full', !State.sidebarOpen);
+    bd.classList.toggle('active', !State.sidebarOpen);
+  }
+}
+
+window.addEventListener('resize', () => {
+  if(window.innerWidth >= 1024) {
+    const sb=$('#sidebar'), bd=$('#sidebarBackdrop'), mc=$('#mainContent');
+    if(sb) sb.classList.remove('open');
+    if(bd) bd.classList.toggle('active', !State.sidebarOpen);
+    if(mc) mc.classList.toggle('full', !State.sidebarOpen);
+    document.body.style.overflow = '';
+  } else {
+    const sb=$('#sidebar'), bd=$('#sidebarBackdrop'), mc=$('#mainContent');
+    if(sb) sb.classList.remove('collapsed');
+    if(mc) mc.classList.remove('full');
+    if(sb && !sb.classList.contains('open')) {
+        if(bd) bd.classList.add('active');
+    }
+  }
+});
+
+function renderPage(){
+  const p=State.page;const bc=$('#headerBreadcrumbs');
+  const titles={'/dashboard':'Дашборд','/schedule':'Конструктор расписания','/rooms':'Аудиторный фонд','/people':'Преподаватели и группы','/analytics':'Аналитика','/bookings':'Бронирование','/settings':'Настройки'};
+  if(bc)bc.textContent=titles[p]||'';
+  switch(p){case'/dashboard':return renderDashboard();case'/schedule':return renderSchedule();case'/rooms':return renderRooms();case'/people':return renderPeople();case'/analytics':return renderAnalytics();case'/bookings':return renderBookings();case'/settings':return renderSettings();default:return renderDashboard();}
+}
+
+/* ========== ДАШБОРД ========== */
+function renderDashboard(){
+  const totalEvents=DB.events.length;const conflictEvents=DB.events.filter(e=>e.conflict).length;const usedRooms=new Set(DB.events.map(e=>e.roomId)).size;const avgLoad=Math.round((totalEvents/(DB.rooms.length*6*6))*100);
+  return `<div class="space-y-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+      <div class="card p-5 sm:p-6 fade-up"><div class="flex items-center justify-between mb-4"><div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#EFF6FF"><i class="fas fa-chart-line text-primary"></i></div><span class="status-badge status-green">Норма</span></div><div class="text-2xl font-800">${avgLoad}%</div><div class="text-sm text-gray-500">Загрузка аудиторий</div><div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full grad-bg rounded-full" style="width:${Math.min(avgLoad,100)}%"></div></div></div>
+      <div class="card p-5 sm:p-6 fade-up fade-up-d1"><div class="flex items-center justify-between mb-4"><div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#F0FDF4"><i class="fas fa-clock text-green-600"></i></div><span class="text-xs text-green-600 font-600">-12 ч/нед</span></div><div class="text-2xl font-800">48 ч</div><div class="text-sm text-gray-500">Сэкономлено времени</div></div>
+      <div class="card p-5 sm:p-6 fade-up fade-up-d2"><div class="flex items-center justify-between mb-4"><div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:${conflictEvents?'#FEE2E2':'#F0FDF4'}"><i class="fas ${conflictEvents?'fa-exclamation-triangle text-red-500':'fa-check-circle text-green-600'}"></i></div><span class="status-badge ${conflictEvents?'status-red':'status-green'}">${conflictEvents?'Есть':'Нет'}</span></div><div class="text-2xl font-800">${conflictEvents}</div><div class="text-sm text-gray-500">Конфликтов</div></div>
+      <div class="card p-5 sm:p-6 fade-up fade-up-d3"><div class="flex items-center justify-between mb-4"><div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:#FFF7ED"><i class="fas fa-door-open text-orange-500"></i></div><span class="text-xs text-orange-500 font-600">${usedRooms}/${DB.rooms.length}</span></div><div class="text-2xl font-800">${DB.rooms.length}</div><div class="text-sm text-gray-500">Аудиторий всего</div></div>
+    </div>
+    <div class="card p-5 sm:p-6 fade-up fade-up-d2">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+        <h3 class="text-lg font-700">Тепловая карта корпусов</h3>
+        <div class="flex gap-2 flex-wrap" id="heatmapTabs">${DB.buildings.map(b=>`<button class="tab-btn ${State.heatmapBuilding===b.id?'active':''}" onclick="State.heatmapBuilding=${b.id};State.heatmapFloor=1;refreshDashboard()">${b.name}</button>`).join('')}</div>
+      </div>
+      <div class="flex gap-2 mb-4 flex-wrap" id="floorTabs">${[1,2,3,4].map(f=>`<button class="tab-btn text-xs ${State.heatmapFloor===f?'active':''}" onclick="State.heatmapFloor=${f};refreshDashboard()" style="padding:6px 14px">Этаж ${f}</button>`).join('')}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" id="heatmapGrid"></div>
+      <div class="flex items-center gap-4 mt-4 text-xs text-gray-500 flex-wrap"><span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background:#22C55E"></span>Свободна</span><span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background:#F59E0B"></span>Средняя</span><span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background:#EF4444"></span>Загружена</span><span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background:#94A3B8"></span>Не используется</span></div>
+    </div>
+    <div class="card p-5 sm:p-6 fade-up fade-up-d3">
+      <h3 class="text-lg font-700 mb-5">Ближайшие события</h3>
+      <div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm min-w-[600px]"><thead><tr class="text-left text-gray-400 border-b border-gray-100"><th class="pb-3 font-600 pl-4 sm:pl-0">День</th><th class="pb-3 font-600">Время</th><th class="pb-3 font-600">Дисциплина</th><th class="pb-3 font-600">Группа</th><th class="pb-3 font-600">Аудитория</th><th class="pb-3 font-600 pr-4 sm:pr-0">Статус</th></tr></thead>
+      <tbody>${DB.events.slice(0,8).map(e=>{const d=getDisc(e.disciplineId),g=getGroup(e.groupId),r=getRoom(e.roomId);return `<tr class="table-row border-b border-gray-50"><td class="py-3 pl-4 sm:pl-0 font-500">${DAYS[e.day]}</td><td class="py-3 text-gray-500">${SLOTS[e.slot-1].time}</td><td class="py-3 font-600">${d?.name||'—'}</td><td class="py-3">${g?.name||'—'}</td><td class="py-3">${r?.name||'—'}</td><td class="py-3 pr-4 sm:pr-0"><span class="status-badge ${e.conflict?'status-red':'status-green'}">${e.conflict?'Конфликт':'ОК'}</span></td></tr>`;}).join('')}</tbody></table></div>
+    </div>
+  </div>`;
+}
+function refreshDashboard(){const pc=$('#pageContent');if(pc)pc.innerHTML=renderDashboard();setTimeout(()=>buildHeatmap(),30);}
+function buildHeatmap(){const grid=$('#heatmapGrid');if(!grid)return;const rooms=roomsByBuilding(State.heatmapBuilding,State.heatmapFloor);grid.innerHTML=rooms.map(r=>{const events=DB.events.filter(e=>e.roomId===r.id);const load=Math.round((events.length/6)*100);let bg='#94A3B8';if(events.length>0){if(load<=40)bg='#22C55E';else if(load<=70)bg='#F59E0B';else bg='#EF4444'}return `<div class="heatmap-cell" style="background:${bg}" title="${r.name}: ${events.length}/6 пар (${load}%)">${r.name}</div>`;}).join('');}
+function initDashboard(){buildHeatmap()}
+
+/* ========== КОНСТРУКТОР РАСПИСАНИЯ ========== */
+function renderSchedule(){
+  const files=State.uploadedFiles;
+  return `<div class="space-y-6">
+    <div class="card p-5 sm:p-6 fade-up"><h3 class="text-lg font-700 mb-4">Загрузка данных</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">${[{key:'plans',label:'Учебные планы',icon:'fa-file-alt',hint:'Формат: .xlsx, .csv'},{key:'rooms',label:'Аудитории',icon:'fa-building',hint:'Формат: .xlsx, .csv'},{key:'restrictions',label:'Ограничения',icon:'fa-user-shield',hint:'Формат: .xlsx, .csv'}].map(f=>`
+        <div class="drop-zone ${files[f.key]?'border-green-400 bg-green-50':''}" id="drop-${f.key}" onclick="document.getElementById('file-${f.key}').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event,'${f.key}')">
+          <input type="file" id="file-${f.key}" class="hidden" accept=".xlsx,.csv" onchange="handleFile(this,'${f.key}')">
+          ${files[f.key]?`<div class="text-green-600 text-3xl mb-2"><i class="fas fa-check-circle"></i></div><div class="font-600 text-green-700 text-sm">${files[f.key]}</div>`:`<div class="text-gray-400 text-3xl mb-2"><i class="fas ${f.icon}"></i></div><div class="font-600 text-sm mb-1">${f.label}</div><div class="text-xs text-gray-400">${f.hint}</div><div class="text-xs text-gray-400 mt-2">Перетащите или нажмите</div>`}
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="card p-5 sm:p-6 fade-up fade-up-d1">
+      <h3 class="text-lg font-700 mb-5">Настройки алгоритма генерации</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">${[{key:'balance',label:'Балансировка нагрузки',desc:'Равномерное распределение пар по дням'},{key:'compactness',label:'Компактность',desc:'Минимизация окон между парами'},{key:'gaps',label:'Минимизация разрывов',desc:'Сокращение пустых слотов в аудиториях'}].map(s=>`
+        <div><div class="flex justify-between mb-1"><span class="font-600 text-sm">${s.label}</span><span class="text-sm text-primary font-700" id="val-${s.key}">${State.algoSettings[s.key]}%</span></div><p class="text-xs text-gray-400 mb-3">${s.desc}</p><input type="range" class="slider-custom" min="0" max="100" value="${State.algoSettings[s.key]}" oninput="State.algoSettings['${s.key}']=+this.value;document.getElementById('val-${s.key}').textContent=this.value+'%'"></div>`).join('')}
+      </div>
+      <div class="mt-6 flex flex-col sm:flex-row gap-3 sm:items-center"><button class="btn-grad" onclick="runGeneration()"><i class="fas fa-magic mr-2"></i>Сгенерировать расписание</button><span class="text-sm text-gray-400" id="genStatus">${State.scheduleGenerated?'Расписание сгенерировано':'Данные не сгенерированы'}</span></div>
+    </div>
+    <div class="card p-5 sm:p-6 fade-up fade-up-d2">
+      <div class="flex flex-col gap-4 mb-5">
+        <h3 class="text-lg font-700">Расписание</h3>
+        <div class="flex flex-wrap gap-2">
+          <select class="input-field !w-full sm:!w-auto" style="padding:8px 14px;font-size:13px" id="scheduleViewType" onchange="State.scheduleFilter=this.value;refreshSchedule()"><option value="group" ${State.scheduleFilter==='group'?'selected':''}>По группам</option><option value="teacher" ${State.scheduleFilter==='teacher'?'selected':''}>По преподавателям</option><option value="room" ${State.scheduleFilter==='room'?'selected':''}>По аудиториям</option></select>
+          <select class="input-field !w-full sm:!w-auto" style="padding:8px 14px;font-size:13px" id="scheduleViewId" onchange="State.scheduleFilterId=+this.value;refreshSchedule()">${getScheduleOptions()}</select>
+          <button class="btn-outline text-sm !px-4 whitespace-nowrap" onclick="toast('Расписание экспортировано в Excel','success')"><i class="fas fa-file-excel mr-1"></i>Экспорт</button>
+          <button class="btn-grad text-sm !px-4 whitespace-nowrap" onclick="toast('Расписание утверждено','success')"><i class="fas fa-check mr-1"></i>Утвердить</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm" style="min-width:800px"><thead><tr class="text-left text-gray-400 border-b border-gray-100"><th class="pb-3 font-600 w-32 pl-4 sm:pl-0">Время</th>${DAYS.map(d=>`<th class="pb-3 font-600 text-center">${d}</th>`).join('')}</tr></thead><tbody id="scheduleBody">${buildScheduleRows()}</tbody></table></div>
+    </div>
+  </div><div id="scheduleSidePanel"></div>`;
+}
+function getScheduleOptions(){if(State.scheduleFilter==='group') return DB.groups.map(g=>`<option value="${g.id}" ${State.scheduleFilterId===g.id?'selected':''}>${g.name}</option>`).join('');if(State.scheduleFilter==='teacher') return DB.teachers.map(t=>`<option value="${t.id}" ${State.scheduleFilterId===t.id?'selected':''}>${t.name.split(' ').slice(0,2).join(' ')}</option>`).join('');return DB.rooms.map(r=>`<option value="${r.id}" ${State.scheduleFilterId===r.id?'selected':''}>${r.name}</option>`).join('');}
+function buildScheduleRows(){return SLOTS.map(sl=>{const cells=DAYS.map((_,di)=>{const ev=DB.events.find(e=>{if(State.scheduleFilter==='group') return e.groupId===State.scheduleFilterId&&e.day===di&&e.slot===sl.id;if(State.scheduleFilter==='teacher') return e.teacherId===State.scheduleFilterId&&e.day===di&&e.slot===sl.id;return e.roomId===State.scheduleFilterId&&e.day===di&&e.slot===sl.id;});if(!ev) return `<td class="py-1 px-1"><div class="schedule-cell bg-gray-50 text-gray-300 text-center" style="min-height:60px;border-left:4px solid transparent">—</div></td>`;const disc=getDisc(ev.disciplineId),grp=getGroup(ev.groupId),tch=getTeacher(ev.teacherId),rm=getRoom(ev.roomId);let info='';if(State.scheduleFilter==='group') info=`${rm?.name||''}<br><span class="text-gray-500">${tch?.name?.split(' ')[0]||''}</span>`;else if(State.scheduleFilter==='teacher') info=`${grp?.name||''}<br><span class="text-gray-500">${rm?.name||''}</span>`;else info=`${grp?.name||''}<br><span class="text-gray-500">${tch?.name?.split(' ')[0]||''}</span>`;return `<td class="py-1 px-1"><div class="schedule-cell ${TYPE_COLOR[ev.type]||''} ${ev.conflict?'conflict':''}" onclick="openEventPanel(${ev.id})"><div class="font-600 text-xs leading-tight mb-0.5">${disc?.name||'—'}</div><div class="text-xs leading-tight opacity-80">${info}</div><div class="text-xs mt-1 opacity-60">${TYPE_MAP[ev.type]||''}</div>${ev.held?'<div class="text-xs text-green-600 mt-0.5"><i class="fas fa-check"></i> Проведено</div>':''}</div></td>`;}).join('');return `<tr class="border-b border-gray-50"><td class="py-1 pr-3 font-600 text-xs text-gray-500 whitespace-nowrap align-top pt-3 pl-4 sm:pl-0">${sl.time}</td>${cells}</tr>`;}).join('');}
+function refreshSchedule(){const pc=$('#pageContent');if(!pc)return;pc.innerHTML=renderSchedule();}
+
+function openEventPanel(evId){const ev=DB.events.find(e=>e.id===evId);if(!ev)return;const disc=getDisc(ev.disciplineId),grp=getGroup(ev.groupId),tch=getTeacher(ev.teacherId),rm=getRoom(ev.roomId);showModal(`<div class="flex items-center justify-between mb-6"><h3 class="text-lg font-800">${disc?.name}</h3><button onclick="closeModal()" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center"><i class="fas fa-times text-gray-400"></i></button></div><div class="space-y-3 text-sm"><div class="flex justify-between"><span class="text-gray-500">Тип</span><span class="font-600">${TYPE_MAP[ev.type]}</span></div><div class="flex justify-between"><span class="text-gray-500">День / Время</span><span class="font-600 text-right ml-2">${DAYS[ev.day]}, ${SLOTS[ev.slot-1].time}</span></div><div class="flex justify-between"><span class="text-gray-500">Группа</span><span class="font-600">${grp?.name}</span></div><div class="flex justify-between"><span class="text-gray-500">Преподаватель</span><span class="font-600 text-right ml-2">${tch?.name}</span></div><div class="flex justify-between"><span class="text-gray-500">Аудитория</span><span class="font-600">${rm?.name} (${rm?.capacity} мест)</span></div><div class="flex justify-between items-center"><span class="text-gray-500">Статус</span><span class="status-badge ${ev.conflict?'status-red':'status-green'}">${ev.conflict?'Конфликт':'Норма'}</span></div></div><div class="mt-6 space-y-3"><div><label class="block text-sm font-600 mb-1.5">Перенести в аудиторию</label><select class="input-field" id="moveRoomSelect">${DB.rooms.filter(r=>r.id!==ev.roomId).map(r=>`<option value="${r.id}">${r.name} (${r.capacity} мест)</option>`).join('')}</select></div><div class="flex gap-3"><button class="btn-grad flex-1 text-sm" onclick="moveEvent(${ev.id})"><i class="fas fa-exchange-alt mr-1"></i>Перенести</button><button class="btn-outline flex-1 text-sm" onclick="toggleHeld(${ev.id})" style="${ev.held?'border-color:#059669;color:#059669':''}"><i class="fas fa-${ev.held?'undo':'check'} mr-1"></i>${ev.held?'Отменить':'Проведено'}</button></div></div>`);}
+function moveEvent(evId){const ev=DB.events.find(e=>e.id===evId);if(!ev)return;const sel=$('#moveRoomSelect');if(!sel)return;ev.roomId=+sel.value;ev.conflict=false;closeModal();refreshSchedule();toast('Занятие перенесено','success');}
+function toggleHeld(evId){const ev=DB.events.find(e=>e.id===evId);if(!ev)return;ev.held=!ev.held;closeModal();refreshSchedule();toast(ev.held?'Отмечено':'Отметка снята','info');}
+function handleFile(input,key){if(input.files.length){State.uploadedFiles[key]=input.files[0].name;refreshSchedule();toast('Файл загружен: '+input.files[0].name,'success')}}
+function handleDrop(e,key){e.preventDefault();e.currentTarget.classList.remove('dragover');if(e.dataTransfer.files.length){State.uploadedFiles[key]=e.dataTransfer.files[0].name;refreshSchedule();toast('Файл загружен','success')}}
+function runGeneration(){const ov=document.createElement('div');ov.className='gen-overlay';ov.id='genOverlay';ov.innerHTML=`<div class="gen-spinner"></div><div class="text-lg font-700">Генерация расписания</div><div class="text-sm text-gray-500" id="genStep">Анализ учебных планов...</div>`;document.body.appendChild(ov);const steps=['Анализ учебных планов...','Проверка ограничений...','Распределение по аудиториям...','Оптимизация нагрузки...','Финальная проверка...'];let i=0;const iv=setInterval(()=>{i++;const st=$('#genStep');if(st)st.textContent=steps[Math.min(i,steps.length-1)];if(i>=steps.length){clearInterval(iv);setTimeout(()=>{generateSchedule();const o=$('#genOverlay');if(o)o.remove();refreshSchedule();const gs=$('#genStatus');if(gs)gs.innerHTML='<span class="text-green-600 font-600"><i class="fas fa-check-circle mr-1"></i>Сгенерировано ('+DB.events.length+' занятий)</span>';toast('Расписание сгенерировано','success')},500)}},700);}
+
+/* ========== АУДИТОРНЫЙ ФОНД ========== */
+function renderRooms(){
+  return `<div class="space-y-6">
+    <div class="flex flex-col gap-4">
+      <div class="flex gap-2 flex-wrap"><select class="input-field !w-full sm:!w-auto" style="padding:8px 14px;font-size:13px" id="roomBuildingFilter" onchange="filterRooms()"><option value="">Все корпуса</option>${DB.buildings.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select><select class="input-field !w-full sm:!w-auto" style="padding:8px 14px;font-size:13px" id="roomTypeFilter" onchange="filterRooms()"><option value="">Все типы</option><option value="lecture">Лекционные</option><option value="practice">Практические</option><option value="lab">Лаборатории</option><option value="computer">Комп. классы</option></select><input class="input-field !w-full sm:!w-48" style="padding:8px 14px;font-size:13px" placeholder="Поиск..." id="roomSearch" oninput="filterRooms()"></div>
+      <div class="flex gap-2"><button class="btn-grad text-sm !px-4" onclick="showAddRoomModal()"><i class="fas fa-plus mr-1"></i>Добавить</button><button class="btn-outline text-sm !px-4" onclick="toast('Импорт аудиторий из файла','info')"><i class="fas fa-file-import mr-1"></i>Импорт</button></div>
+    </div>
+    <div class="card overflow-hidden fade-up"><div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm min-w-[800px]"><thead><tr class="text-left text-gray-400 bg-gray-50 border-b border-gray-100"><th class="p-4 font-600 pl-4 sm:pl-4">Аудитория</th><th class="p-4 font-600">Корпус</th><th class="p-4 font-600">Этаж</th><th class="p-4 font-600">Вместимость</th><th class="p-4 font-600">Тип</th><th class="p-4 font-600">Оборудование</th><th class="p-4 font-600">Загрузка</th><th class="p-4 font-600 pr-4">Действия</th></tr></thead><tbody id="roomsTableBody">${buildRoomsRows(DB.rooms)}</tbody></table></div></div>
+  </div>`;
+}
+function buildRoomsRows(rooms){return rooms.map(r=>{const b=getBuilding(r.buildingId);const events=DB.events.filter(e=>e.roomId===r.id);const load=Math.round((events.length/6)*100);return `<tr class="table-row border-b border-gray-50"><td class="p-4 font-700 pl-4 sm:pl-4">${r.name}</td><td class="p-4 text-gray-500">${b?.name||'—'}</td><td class="p-4">${r.floor}</td><td class="p-4">${r.capacity}</td><td class="p-4"><span class="status-badge ${r.type==='lecture'?'status-orange':r.type==='lab'?'status-red':'status-green'}">${r.type==='lecture'?'Лекционная':r.type==='practice'?'Практическая':r.type==='lab'?'Лаборатория':'Комп. класс'}</span></td><td class="p-4 text-gray-500 text-xs">${r.equipment.join(', ')}</td><td class="p-4"><div class="flex items-center gap-2"><div class="w-16 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${load}%;background:${load<=40?'#22C55E':load<=70?'#F59E0B':'#EF4444'}"></div></div><span class="text-xs font-600">${load}%</span></div></td><td class="p-4 pr-4"><button onclick="showRoomDetail(${r.id})" class="text-primary hover:underline text-xs font-600">Детали</button></td></tr>`;}).join('');}
+function filterRooms(){const bF=$('#roomBuildingFilter')?.value||'';const tF=$('#roomTypeFilter')?.value||'';const sF=($('#roomSearch')?.value||'').toLowerCase();let filtered=DB.rooms;if(bF)filtered=filtered.filter(r=>r.buildingId===+bF);if(tF)filtered=filtered.filter(r=>r.type===tF);if(sF)filtered=filtered.filter(r=>r.name.toLowerCase().includes(sF));const tb=$('#roomsTableBody');if(tb)tb.innerHTML=buildRoomsRows(filtered);}
+function showAddRoomModal(){showModal(`<h3 class="text-lg font-800 mb-5">Добавить аудиторию</h3><div class="space-y-4"><div><label class="block text-sm font-600 mb-1">Название</label><input class="input-field" id="newRoomName" placeholder="Г-301"></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-600 mb-1">Корпус</label><select class="input-field" id="newRoomBuilding">${DB.buildings.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select></div><div><label class="block text-sm font-600 mb-1">Этаж</label><input class="input-field" id="newRoomFloor" type="number" min="1" value="1"></div></div><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-600 mb-1">Вместимость</label><input class="input-field" id="newRoomCap" type="number" min="1" value="30"></div><div><label class="block text-sm font-600 mb-1">Тип</label><select class="input-field" id="newRoomType"><option value="practice">Практическая</option><option value="lecture">Лекционная</option><option value="lab">Лаборатория</option><option value="computer">Комп. класс</option></select></div></div><button class="btn-grad w-full" onclick="addRoom()">Добавить</button></div>`);}
+function addRoom(){const name=$('#newRoomName')?.value;const bid=+$('#newRoomBuilding')?.value;const floor=+$('#newRoomFloor')?.value;const cap=+$('#newRoomCap')?.value;const type=$('#newRoomType')?.value;if(!name){toast('Укажите название','error');return}DB.rooms.push({id:DB.rooms.length+1,name,buildingId:bid,floor,capacity:cap,type,equipment:[]});closeModal();navigate('/rooms');toast('Аудитория '+name+' добавлена','success');}
+function showRoomDetail(id){const r=getRoom(id);if(!r)return;const b=getBuilding(r.buildingId);const events=DB.events.filter(e=>e.roomId===id);showModal(`<div class="flex items-center justify-between mb-5"><h3 class="text-lg font-800">${r.name}</h3><button onclick="closeModal()" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center"><i class="fas fa-times text-gray-400"></i></button></div><div class="grid grid-cols-2 gap-3 text-sm mb-5"><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Корпус</div><div class="font-600">${b?.name}</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Этаж</div><div class="font-600">${r.floor}</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Вместимость</div><div class="font-600">${r.capacity} мест</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Тип</div><div class="font-600">${TYPE_MAP[r.type]||r.type}</div></div></div><div class="text-sm mb-2 font-600">Оборудование</div><div class="flex flex-wrap gap-2 mb-5">${r.equipment.map(e=>`<span class="px-3 py-1 bg-gray-100 rounded-lg text-xs font-500">${e}</span>`).join('')||'<span class="text-gray-400 text-sm">Не указано</span>'}</div><div class="text-sm mb-2 font-600">Занятия (${events.length})</div><div class="space-y-2 max-h-40 overflow-y-auto">${events.slice(0,10).map(e=>{const d=getDisc(e.disciplineId),g=getGroup(e.groupId);return `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs gap-1"><span class="font-600">${d?.name}</span><span class="text-gray-500">${DAYS[e.day]} ${SLOTS[e.slot-1].time} — ${g?.name}</span></div>`;}).join('')}</div>`);}
+
+/* ========== ПРЕПОДАВАТЕЛИ И ГРУППЫ ========== */
+function renderPeople(){const isTeachers=State.peopleTab==='teachers';return `<div class="space-y-6"><div class="flex gap-2 overflow-x-auto pb-2"><button class="tab-btn ${isTeachers?'active':''}" onclick="State.peopleTab='teachers';navigate('/people')">Преподаватели (${DB.teachers.length})</button><button class="tab-btn ${!isTeachers?'active':''}" onclick="State.peopleTab='groups';navigate('/people')">Группы (${DB.groups.length})</button></div>${isTeachers?`<div class="card overflow-hidden fade-up"><div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm min-w-[700px]"><thead><tr class="text-left text-gray-400 bg-gray-50 border-b border-gray-100"><th class="p-4 font-600 pl-4 sm:pl-4">ФИО</th><th class="p-4 font-600">Кафедра</th><th class="p-4 font-600">Макс. часов</th><th class="p-4 font-600">Нагрузка</th><th class="p-4 font-600">Ограничения</th><th class="p-4 font-600 pr-4">Действия</th></tr></thead><tbody>${DB.teachers.map(t=>{const hours=DB.events.filter(e=>e.teacherId===t.id).length*2;const load=Math.round((hours/t.maxHours)*100);return `<tr class="table-row border-b border-gray-50"><td class="p-4 font-600 pl-4 sm:pl-4">${t.name}</td><td class="p-4 text-gray-500">${t.dept}</td><td class="p-4">${t.maxHours} ч/нед</td><td class="p-4"><div class="flex items-center gap-2"><div class="w-16 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(load,100)}%;background:${load<=80?'#22C55E':load<=100?'#F59E0B':'#EF4444'}"></div></div><span class="text-xs font-600">${hours}ч</span></div></td><td class="p-4 text-xs text-gray-500">${t.restrictions.length?t.restrictions.map(r=>'Пара '+r).join(', '):'—'}</td><td class="p-4 pr-4"><button onclick="showTeacherDetail(${t.id})" class="text-primary hover:underline text-xs font-600">Детали</button></td></tr>`;}).join('')}</tbody></table></div></div>`:`<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 fade-up">${DB.groups.map(g=>{const events=DB.events.filter(e=>e.groupId===g.id);const discs=[...new Set(events.map(e=>getDisc(e.disciplineId)?.name).filter(Boolean))];return `<div class="card p-6"><div class="flex items-center justify-between mb-4"><div class="w-12 h-12 grad-bg rounded-xl flex items-center justify-center text-white font-800">${g.name.split('-')[0]}</div><span class="status-badge status-green">${g.course} курс</span></div><div class="font-700 text-lg mb-1">${g.name}</div><div class="flex gap-4 text-sm"><div><span class="text-gray-400">Студ:</span> <span class="font-600">${g.students}</span></div><div><span class="text-gray-400">Пар:</span> <span class="font-600">${events.length}</span></div></div><div class="mt-3 text-xs text-gray-400">Дисц.: ${discs.slice(0,3).join(', ')}${discs.length>3?'...':''}</div></div>`;}).join('')}</div>`}</div>`;}
+function showTeacherDetail(id){const t=getTeacher(id);if(!t)return;const events=DB.events.filter(e=>e.teacherId===id);const hours=events.length*2;showModal(`<div class="flex items-center justify-between mb-5"><h3 class="text-lg font-800">${t.name}</h3><button onclick="closeModal()" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center"><i class="fas fa-times text-gray-400"></i></button></div><div class="grid grid-cols-2 gap-3 text-sm mb-5"><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Кафедра</div><div class="font-600">${t.dept}</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Телефон</div><div class="font-600">${t.phone}</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Нагрузка</div><div class="font-600">${hours} / ${t.maxHours} ч</div></div><div class="bg-gray-50 rounded-xl p-3"><div class="text-gray-400 text-xs mb-1">Ограничения</div><div class="font-600">${t.restrictions.length?t.restrictions.map(r=>'Пара '+r).join(', '):'Нет'}</div></div></div><div class="text-sm mb-2 font-600">Расписание (${events.length} пар)</div><div class="space-y-2 max-h-48 overflow-y-auto">${events.map(e=>{const d=getDisc(e.disciplineId),g=getGroup(e.groupId),r=getRoom(e.roomId);return `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs gap-1"><span class="font-600">${d?.name} (${g?.name})</span><span class="text-gray-500">${DAYS[e.day]} ${SLOTS[e.slot-1].time} — ${r?.name}</span></div>`;}).join('')}</div>`);}
+
+/* ========== АНАЛИТИКА ========== */
+function renderAnalytics(){return `<div class="space-y-6"><div class="grid grid-cols-1 lg:grid-cols-2 gap-6"><div class="card p-5 sm:p-6 fade-up"><h3 class="text-lg font-700 mb-4">Загрузка по корпусам</h3><div class="w-full"><canvas id="chartBuildings" height="260"></canvas></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d1"><h3 class="text-lg font-700 mb-4">Загрузка по типам</h3><div class="w-full"><canvas id="chartTypes" height="260"></canvas></div></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d2"><h3 class="text-lg font-700 mb-4">Загрузка по дням недели</h3><div class="w-full"><canvas id="chartDays" height="200"></canvas></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d3"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5"><h3 class="text-lg font-700">Простаивающие аудитории</h3><button class="btn-grad text-sm !px-4 whitespace-nowrap" onclick="toast('Отчёт PDF сформирован','success')"><i class="fas fa-file-pdf mr-1"></i>PDF Отчёт</button></div><div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm min-w-[500px]"><thead><tr class="text-left text-gray-400 bg-gray-50 border-b border-gray-100"><th class="p-4 font-600 pl-4 sm:pl-4">Аудитория</th><th class="p-4 font-600">Корпус</th><th class="p-4 font-600">Этаж</th><th class="p-4 font-600">Вместимость</th><th class="p-4 font-600 pr-4">Тип</th></tr></thead><tbody>${DB.rooms.filter(r=>!DB.events.some(e=>e.roomId===r.id)).length?DB.rooms.filter(r=>!DB.events.some(e=>e.roomId===r.id)).map(r=>{const b=getBuilding(r.buildingId);return `<tr class="table-row border-b border-gray-50"><td class="p-4 font-600 pl-4 sm:pl-4">${r.name}</td><td class="p-4 text-gray-500">${b?.name}</td><td class="p-4">${r.floor}</td><td class="p-4">${r.capacity}</td><td class="p-4 pr-4">${r.type==='lecture'?'Лекционная':r.type==='practice'?'Практическая':r.type==='lab'?'Лаборатория':'Комп. класс'}</td></tr>`;}).join(''):`<tr><td colspan="5" class="p-8 text-center text-gray-400">Все аудитории задействованы</td></tr>`}</tbody></table></div></div></div>`;}
+function initAnalytics(){const colors=['#2563EB','#7C3AED','#D97706'];const ctx1=document.getElementById('chartBuildings')?.getContext('2d');if(ctx1) new Chart(ctx1,{type:'bar',data:{labels:DB.buildings.map(b=>b.name),datasets:[{label:'Загрузка %',data:DB.buildings.map(b=>{const rooms=DB.rooms.filter(r=>r.buildingId===b.id);const ev=DB.events.filter(e=>rooms.some(r=>r.id===e.roomId));return Math.round((ev.length/(rooms.length*36))*100)}),backgroundColor:colors,borderRadius:8,barThickness:48}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}});const ctx2=document.getElementById('chartTypes')?.getContext('2d');if(ctx2) new Chart(ctx2,{type:'doughnut',data:{labels:['Лекционные','Практические','Лаборатории'],datasets:[{data:['lecture','practice','lab'].map(t=>{const rooms=DB.rooms.filter(r=>r.type===t);return DB.events.filter(e=>rooms.some(r=>r.id===e.roomId)).length}),backgroundColor:colors,borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{padding:16,usePointStyle:true,pointStyleWidth:10}}}}});const ctx3=document.getElementById('chartDays')?.getContext('2d');if(ctx3) new Chart(ctx3,{type:'line',data:{labels:DAYS,datasets:[{label:'Количество пар',data:DAYS.map((_,di)=>DB.events.filter(e=>e.day===di).length),borderColor:'#2563EB',backgroundColor:'rgba(37,99,235,0.1)',fill:true,tension:.4,pointBackgroundColor:'#2563EB',pointRadius:5,pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{grid:{display:false}}}}});}
+
+/* ========== БРОНИРОВАНИЕ ========== */
+function renderBookings(){const statusMap={pending:{text:'На рассмотрении',cls:'status-orange'},approved:{text:'Одобрено',cls:'status-green'},rejected:{text:'Отклонено',cls:'status-red'}};return `<div class="space-y-6"><div class="card p-5 sm:p-6 fade-up"><h3 class="text-lg font-700 mb-5">Новая заявка</h3><div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"><div><label class="block text-sm font-600 mb-1">Аудитория</label><select class="input-field" id="bkRoom">${DB.rooms.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select></div><div><label class="block text-sm font-600 mb-1">Дата</label><input class="input-field" id="bkDate" type="date" value="2025-02-17"></div><div><label class="block text-sm font-600 mb-1">Пара</label><select class="input-field" id="bkSlot">${SLOTS.map(s=>`<option value="${s.id}">${s.time}</option>`).join('')}</select></div><div><label class="block text-sm font-600 mb-1">Заявитель</label><input class="input-field" id="bkRequester" placeholder="ФИО или подразделение"></div></div><div class="mb-4"><label class="block text-sm font-600 mb-1">Цель</label><input class="input-field" id="bkPurpose" placeholder="Описание мероприятия"></div><button class="btn-grad" onclick="submitBooking()"><i class="fas fa-paper-plane mr-1"></i>Подать заявку</button></div><div class="card p-5 sm:p-6 fade-up fade-up-d1"><h3 class="text-lg font-700 mb-4">Доступность аудитории</h3><div class="grid grid-cols-3 sm:grid-cols-6 gap-2" id="availGrid">${SLOTS.map(sl=>{const events=DB.events.filter(e=>e.slot===sl.id);return `<div class="text-center"><div class="text-xs font-600 text-gray-500 mb-2 truncate">${sl.time.split('—')[0].trim()}</div>${DAYS.map((d,di)=>{const occupied=events.some(e=>e.day===di);return `<div class="w-full aspect-square rounded-lg text-xs flex items-center justify-center font-600 ${occupied?'bg-red-100 text-red-600':'bg-green-100 text-green-600'}" title="${d}: ${occupied?'Занято':'Свободно'}">${d}</div>`;}).join('')}</div>`;}).join('')}</div></div><div class="card p-5 sm:p-6 fade-up fade-up-d2"><h3 class="text-lg font-700 mb-5">Заявки</h3><div class="overflow-x-auto -mx-4 sm:mx-0"><table class="w-full text-sm min-w-[600px]"><thead><tr class="text-left text-gray-400 bg-gray-50 border-b border-gray-100"><th class="p-4 font-600 pl-4 sm:pl-4">Аудитория</th><th class="p-4 font-600">Дата</th><th class="p-4 font-600">Время</th><th class="p-4 font-600">Цель</th><th class="p-4 font-600">Заявитель</th><th class="p-4 font-600">Статус</th><th class="p-4 font-600 pr-4">Действия</th></tr></thead><tbody>${DB.bookings.map(b=>{const r=getRoom(b.roomId);const st=statusMap[b.status];return `<tr class="table-row border-b border-gray-50"><td class="p-4 font-600 pl-4 sm:pl-4">${r?.name||'—'}</td><td class="p-4 text-gray-500">${b.date}</td><td class="p-4 text-gray-500">${SLOTS[b.timeSlot-1]?.time||'—'}</td><td class="p-4">${b.purpose}</td><td class="p-4 text-gray-500">${b.requester}</td><td class="p-4"><span class="status-badge ${st.cls}">${st.text}</span></td><td class="p-4 pr-4 flex gap-2 flex-wrap">${b.status==='pending'?`<button onclick="approveBooking(${b.id})" class="text-green-600 hover:underline text-xs font-600">Одобрить</button><button onclick="rejectBooking(${b.id})" class="text-red-500 hover:underline text-xs font-600">Отклонить</button>`:'—'}</td></tr>`;}).join('')}</tbody></table></div></div></div>`;}
+function submitBooking(){const room=+$('#bkRoom')?.value,date=$('#bkDate')?.value,slot=+$('#bkSlot')?.value,requester=$('#bkRequester')?.value,purpose=$('#bkPurpose')?.value;if(!requester||!purpose){toast('Заполните все поля','error');return}DB.bookings.push({id:DB.bookings.length+1,roomId:room,date,timeSlot:slot,purpose,status:'pending',requester});navigate('/bookings');toast('Заявка подана','success');}
+function approveBooking(id){const b=DB.bookings.find(x=>x.id===id);if(b)b.status='approved';navigate('/bookings');toast('Заявка одобрена','success')}
+function rejectBooking(id){const b=DB.bookings.find(x=>x.id===id);if(b)b.status='rejected';navigate('/bookings');toast('Заявка отклонена','info')}
+
+/* ========== НАСТРОЙКИ ========== */
+function renderSettings(){return `<div class="space-y-6 max-w-3xl"><div class="card p-5 sm:p-6 fade-up"><h3 class="text-lg font-700 mb-5">Профиль вуза</h3><div class="space-y-4"><div><label class="block text-sm font-600 mb-1">Полное название</label><input class="input-field" value="${DB.university.name}"></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label class="block text-sm font-600 mb-1">Сокращённое название</label><input class="input-field" value="${DB.university.short}"></div><div><label class="block text-sm font-600 mb-1">Ректор</label><input class="input-field" value="${DB.university.rector}"></div></div><button class="btn-grad" onclick="toast('Профиль сохранён','success')">Сохранить изменения</button></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d1"><h3 class="text-lg font-700 mb-5">Интеграции и API</h3><div class="space-y-4"><div><div class="flex items-center justify-between mb-1"><label class="text-sm font-600">1С:Университет</label><span class="status-badge status-green">Подключено</span></div><div class="flex gap-2"><input class="input-field flex-1" value="sk-1c-a8f3...d92e" readonly><button class="btn-outline text-xs !px-4" onclick="toast('Ключ скопирован','info')"><i class="fas fa-copy"></i></button></div></div><div><div class="flex items-center justify-between mb-1"><label class="text-sm font-600">Moodle</label><span class="status-badge status-orange">Ожидает</span></div><div class="flex gap-2"><input class="input-field flex-1" placeholder="Введите API-токен Moodle"><button class="btn-outline text-xs !px-4">Подключить</button></div></div></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d2"><h3 class="text-lg font-700 mb-5">Синхронизация календарей</h3><div class="space-y-4"><div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl gap-4"><div class="flex items-center gap-3"><i class="fab fa-google text-xl" style="color:#4285F4"></i><div><div class="font-600 text-sm">Google Calendar</div><div class="text-xs text-gray-400">Экспорт в Google Календарь</div></div></div><button class="btn-outline text-xs !px-4 whitespace-nowrap" onclick="toast('Ссылка скопирована','success')">Подключить</button></div><div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl gap-4"><div class="flex items-center gap-3"><i class="fas fa-calendar-alt text-xl text-orange-500"></i><div><div class="font-600 text-sm">iCal (.ics)</div><div class="text-xs text-gray-400">Импорт в любой календарь</div></div></div><button class="btn-outline text-xs !px-4 whitespace-nowrap" onclick="toast('Файл .ics скачан','success')">Скачать</button></div></div></div><div class="card p-5 sm:p-6 fade-up fade-up-d3"><div class="flex items-center justify-between mb-5"><h3 class="text-lg font-700">Управление пользователями</h3><button class="btn-grad text-sm !px-4" onclick="toast('Приглашение отправлено','success')"><i class="fas fa-user-plus mr-1"></i>Пригласить</button></div><div class="space-y-3">${[{name:'Администратор',email:'admin@agmu.ru',role:'Админ',active:true},{name:'Смирнова Е.К.',email:'smirnova@agmu.ru',role:'Диспетчер',active:true},{name:'Кузнецов И.П.',email:'kuznetsov@agmu.ru',role:'Диспетчер',active:false}].map(u=>`<div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl gap-4"><div class="flex items-center gap-3 min-w-0"><div class="w-10 h-10 rounded-full grad-bg flex items-center justify-center text-white font-700 text-sm flex-shrink-0">${u.name[0]}</div><div class="min-w-0"><div class="font-600 text-sm truncate">${u.name}</div><div class="text-xs text-gray-400 truncate">${u.email}</div></div></div><div class="flex items-center gap-3 flex-shrink-0"><span class="status-badge ${u.active?'status-green':'status-red'} hidden sm:inline-block">${u.active?'Активен':'Заблокирован'}</span><span class="text-xs text-gray-400 bg-white px-2 py-1 rounded-lg">${u.role}</span></div></div>`).join('')}</div></div></div>`;}
+
+/* ========== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ========== */
+function attachGlobalEvents(){document.getElementById('authForm')?.addEventListener('submit',function(e){e.preventDefault();const email=$('#authEmail')?.value;const pass=$('#authPass')?.value;if(State.page==='/register'){const pass2=$('#authPass2')?.value;if(pass!==pass2){toast('Пароли не совпадают','error');return}DB.users.push({id:DB.users.length+1,email,password:pass,name:$('#authName')?.value||'Пользователь',role:'admin'});toast('Регистрация успешна','success');navigate('/login');return}const user=DB.users.find(u=>u.email===email&&u.password===pass);if(!user){toast('Неверный email или пароль','error');return}State.user=user;navigate('/dashboard');});}
+
+/* ========== ИНИЦИАЛИЗАЦИЯ ========== */
+window.addEventListener('DOMContentLoaded', getApp);
+</script>
+</body>
+</html>
